@@ -3,290 +3,321 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { GeminiCoderService, GroundingSource } from './services/geminiService';
 import { Project, GeneratedFile, ProjectTemplate, TestCase } from './types';
 import Prism from 'prismjs';
+// Prism highlighting languages
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-json';
 
 const TEMPLATES: ProjectTemplate[] = [
   {
-    id: 'react-pro',
-    name: 'React 2025 Stack',
-    description: 'En son React 19, Vite ve Tailwind v4 dökümanlarını araştırarak kurar.',
-    icon: 'fa-rocket',
-    color: 'text-cyan-400',
-    basePrompt: 'Create a professional React 19 application with a focus on high performance and modern state management.'
+    id: 'react-autonomous',
+    name: 'Otonom React Projesi',
+    description: 'En son React ve Tailwind teknolojilerini webden araştırıp uygular.',
+    icon: 'fa-microchip',
+    color: 'text-sky-400',
+    basePrompt: 'Create a high-performance React application using the latest libraries found on the web.'
   },
   {
-    id: 'agent-ai',
-    name: 'AI Agent Shell',
-    description: 'Kendi kendine düşünen ve internetten veri çeken bir AI Agent iskeleti.',
-    icon: 'fa-brain',
+    id: 'backend-agent',
+    name: 'AI Backend Servis',
+    description: 'Node.js üzerinde çalışan, kendi kendine döküman okuyan API yapısı.',
+    icon: 'fa-robot',
     color: 'text-purple-400',
-    basePrompt: 'Create a Node.js based AI Agent framework that can integrate with various LLM providers and search tools.'
+    basePrompt: 'Design a Node.js backend system that acts as an AI agent, capable of reading external APIs.'
   }
 ];
 
 const ResearchPulse: React.FC<{ isResearching: boolean, currentAction: string }> = ({ isResearching, currentAction }) => {
   if (!isResearching) return null;
   return (
-    <div className="bg-sky-500/10 border border-sky-500/30 rounded-2xl p-4 mb-6 research-glow animate-in slide-in-from-top-4">
-      <div className="flex items-center gap-4">
+    <div className="bg-sky-500/5 border border-sky-500/20 rounded-3xl p-6 research-glow animate-in fade-in zoom-in duration-300 mb-6">
+      <div className="flex items-center gap-6">
         <div className="relative">
-          <div className="w-10 h-10 border-4 border-sky-500/20 border-t-sky-500 rounded-full animate-spin"></div>
+          <div className="w-14 h-14 border-4 border-sky-500/10 border-t-sky-500 rounded-full animate-spin"></div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <i className="fas fa-globe text-xs text-sky-400"></i>
+            <i className="fa-solid fa-search text-sky-500 text-sm animate-pulse"></i>
           </div>
         </div>
-        <div className="flex-1">
-          <h4 className="text-xs font-black text-sky-400 uppercase tracking-widest mb-1">İnternet Araştırması Aktif</h4>
-          <p className="text-[11px] text-slate-400 font-mono italic">{currentAction}...</p>
-        </div>
-        <div className="flex gap-1">
-          <div className="w-1 h-4 bg-sky-500/50 animate-bounce"></div>
-          <div className="w-1 h-4 bg-sky-500/50 animate-bounce [animation-delay:0.2s]"></div>
-          <div className="w-1 h-4 bg-sky-500/50 animate-bounce [animation-delay:0.4s]"></div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const FileViewer: React.FC<{ 
-  file: GeneratedFile | null, 
-  onSave: (newContent: string) => void 
-}> = ({ file, onSave }) => {
-  const [localContent, setLocalContent] = useState('');
-  const [isSaved, setIsSaved] = useState(true);
-
-  useEffect(() => {
-    if (file) {
-      setLocalContent(file.content);
-      setIsSaved(true);
-      // Wait for React render then highlight
-      setTimeout(() => Prism.highlightAll(), 0);
-    }
-  }, [file]);
-
-  if (!file) return (
-    <div className="flex-1 flex items-center justify-center text-slate-600 italic bg-slate-900/50 rounded-2xl border border-dashed border-slate-800">
-      Düzenlemek için bir dosya seçin...
-    </div>
-  );
-
-  const handleSave = () => {
-    onSave(localContent);
-    setIsSaved(true);
-  };
-
-  const extension = file.path.split('.').pop() || 'js';
-  const languageClass = `language-${extension === 'ts' || extension === 'tsx' ? 'typescript' : extension}`;
-
-  return (
-    <div className="flex-1 flex flex-col bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative">
-      <div className="bg-slate-800/80 px-6 py-3 border-b border-slate-700 flex justify-between items-center backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <i className="fas fa-file-code text-sky-400"></i>
-          <span className="font-mono text-sm text-slate-200">{file.path}</span>
-          {!isSaved && <span className="w-2 h-2 bg-amber-500 rounded-full"></span>}
-        </div>
-        {!isSaved && (
-          <button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2">
-            <i className="fas fa-save"></i> KAYDET
-          </button>
-        )}
-      </div>
-      
-      <div className="flex-1 relative font-mono text-sm overflow-hidden flex bg-slate-950">
-        <div className="bg-slate-900/50 text-slate-700 px-3 py-4 text-right select-none border-r border-slate-800/50 text-xs">
-          {localContent.split('\n').map((_, i) => <div key={i} className="h-[21px]">{i + 1}</div>)}
-        </div>
-        <div className="flex-1 relative overflow-auto">
-          <textarea
-            value={localContent}
-            onChange={(e) => { setLocalContent(e.target.value); setIsSaved(false); }}
-            className="absolute inset-0 w-full h-full p-4 bg-transparent text-transparent caret-white resize-none outline-none font-mono z-20 whitespace-pre overflow-hidden"
-            spellCheck={false}
-          />
-          <pre className="p-4 m-0 pointer-events-none z-10 whitespace-pre">
-            <code className={languageClass}>{localContent}</code>
-          </pre>
+        <div>
+          <h3 className="text-sky-400 font-medium text-lg flex items-center gap-2">
+            Researching Web for Best Practices...
+            <span className="flex gap-1">
+              <span className="w-1 h-1 bg-sky-500 rounded-full animate-bounce delay-75"></span>
+              <span className="w-1 h-1 bg-sky-500 rounded-full animate-bounce delay-150"></span>
+              <span className="w-1 h-1 bg-sky-500 rounded-full animate-bounce delay-300"></span>
+            </span>
+          </h3>
+          <p className="text-zinc-400 text-sm mt-1">{currentAction}</p>
         </div>
       </div>
     </div>
   );
 };
 
-export default function App() {
+const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [project, setProject] = useState<Project | null>(null);
-  const [isBuilding, setIsBuilding] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [currentAction, setCurrentAction] = useState('');
-  const [selectedFileIndex, setSelectedFileIndex] = useState<number | null>(null);
-  const [logs, setLogs] = useState<string[]>(['Sistem hazır. Çevrimiçi araştırma motoru yüklendi.']);
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [sources, setSources] = useState<GroundingSource[]>([]);
   
-  const coderService = useMemo(() => new GeminiCoderService(), []);
-  const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
+  const gemini = useMemo(() => new GeminiCoderService(), []);
 
-  const handleStart = async (customPrompt?: string) => {
-    const finalPrompt = customPrompt || prompt;
-    if (!finalPrompt.trim()) return;
+  useEffect(() => {
+    Prism.highlightAll();
+  }, [project, activeFileIndex]);
 
-    setIsBuilding(true);
-    setCurrentAction('Pazar trendleri ve teknoloji yığını araştırılıyor');
-    addLog(`Başlatılıyor: ${finalPrompt}`);
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+
+    setIsGenerating(true);
+    setSources([]);
+    setProject({
+      id: Date.now().toString(),
+      name: 'Generating Project...',
+      description: prompt,
+      files: [],
+      tests: [],
+      status: 'generating',
+      progress: 0
+    });
 
     try {
-      const structureResult = await coderService.generateProjectStructure(finalPrompt);
-      setSources(structureResult.sources);
+      // Step 1: Architect the project structure.
+      setCurrentAction('Searching latest tech stack trends...');
+      const archResponse = await gemini.generateProjectStructure(prompt);
+      setSources(prev => [...prev, ...archResponse.sources]);
       
-      const newProject: Project = { 
-        id: Date.now().toString(), 
-        name: structureResult.data.projectName, 
-        description: finalPrompt, 
-        files: [], 
-        tests: [],
-        status: 'generating', 
-        progress: 10 
-      };
-      setProject(newProject);
+      const structure = archResponse.data;
+      const initialFiles: GeneratedFile[] = structure.files.map((f: any) => ({
+        path: f.path,
+        content: '',
+        language: f.path.endsWith('.tsx') || f.path.endsWith('.ts') ? 'typescript' : 'javascript'
+      }));
 
-      const generatedFiles: GeneratedFile[] = [];
-      for (let i = 0; i < structureResult.data.files.length; i++) {
-        const fileSpec = structureResult.data.files[i];
-        setCurrentAction(`${fileSpec.path} için internet dökümantasyonu taranıyor`);
-        addLog(`${fileSpec.path} analiz ediliyor...`);
-        
-        const contentResult = await coderService.generateFileContent(
-          finalPrompt, 
-          fileSpec.path, 
-          JSON.stringify(structureResult.data.files)
-        );
-        
-        setSources(prev => {
-          const combined = [...prev, ...contentResult.sources];
-          return Array.from(new Set(combined.map(s => s.uri))).map(uri => combined.find(s => s.uri === uri)!);
-        });
+      setProject(prev => prev ? {
+        ...prev,
+        name: structure.projectName,
+        files: initialFiles,
+        progress: 10
+      } : null);
 
-        const file: GeneratedFile = { 
-          path: fileSpec.path, 
-          content: contentResult.data, 
-          language: fileSpec.path.split('.').pop() || 'text' 
-        };
-        generatedFiles.push(file);
-        setProject(prev => prev ? { ...prev, files: [...generatedFiles], progress: 10 + ((i + 1) / structureResult.data.files.length) * 85 } : null);
+      // Step 2: Generate content for each planned file.
+      let context = `Project Structure:\n${structure.files.map((f: any) => f.path).join('\n')}`;
+      
+      for (let i = 0; i < initialFiles.length; i++) {
+        const file = initialFiles[i];
+        setCurrentAction(`Generating logic for ${file.path}...`);
+        
+        const contentResponse = await gemini.generateFileContent(prompt, file.path, context);
+        setSources(prev => [...prev, ...contentResponse.sources]);
+        
+        const updatedFiles = [...initialFiles];
+        updatedFiles[i].content = contentResponse.data;
+        
+        setProject(prev => prev ? {
+          ...prev,
+          files: [...updatedFiles],
+          progress: 10 + ((i + 1) / initialFiles.length) * 90
+        } : null);
       }
 
       setProject(prev => prev ? { ...prev, status: 'completed', progress: 100 } : null);
-      addLog("Geliştirme süreci web verileriyle doğrulandı.");
-    } catch (e) {
-      addLog("KRİTİK HATA: Süreç yarıda kesildi.");
+    } catch (error) {
+      console.error(error);
+      setProject(prev => prev ? { ...prev, status: 'error' } : null);
     } finally {
-      setIsBuilding(false);
+      setIsGenerating(false);
       setCurrentAction('');
     }
   };
 
-  return (
-    <div className="min-h-screen flex flex-col p-4 md:p-8 gap-8 max-w-screen-2xl mx-auto overflow-x-hidden">
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <h1 className="text-4xl font-black gradient-text tracking-tighter flex items-center gap-4">
-            <i className="fas fa-satellite-dish text-sky-500 animate-pulse"></i> EVO RESEARCHER
-          </h1>
-          <p className="text-slate-500 text-sm mt-2 font-medium">İnternet Verileriyle Beslenen Otonom Yazılım Motoru</p>
-        </div>
-        <div className="flex items-center gap-4 bg-slate-900/50 p-1.5 rounded-2xl border border-slate-800">
-           <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border ${isBuilding ? 'bg-sky-500/10 border-sky-500/30' : 'bg-slate-800 border-slate-700'}`}>
-              <div className={`w-2 h-2 rounded-full ${isBuilding ? 'bg-sky-400 animate-ping' : 'bg-emerald-500'}`}></div>
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                {isBuilding ? 'Araştırılıyor' : 'Sistem Çevrimiçi'}
-              </span>
-           </div>
-        </div>
-      </header>
+  const activeFile = project?.files[activeFileIndex];
 
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 min-h-0">
-        <aside className="lg:col-span-4 flex flex-col gap-6">
-          <section className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl relative overflow-hidden">
-            <div className="scan-line absolute inset-0 opacity-10 pointer-events-none"></div>
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <i className="fas fa-search text-sky-400"></i> Görev Tanımlama
-            </h3>
-            <textarea 
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-sky-500/30">
+      {/* Header Bar */}
+      <nav className="border-b border-white/5 bg-zinc-900/50 backdrop-blur-xl sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/20">
+              <i className="fa-solid fa-microchip text-white text-xl"></i>
+            </div>
+            <h1 className="text-xl font-bold tracking-tight">Gemini<span className="text-sky-500 italic">Coder</span></h1>
+          </div>
+          <div className="flex items-center gap-4">
+            {gemini.isDemoMode && (
+              <span className="text-xs bg-amber-500/10 text-amber-500 px-3 py-1 rounded-full border border-amber-500/20">
+                Demo Mode Active
+              </span>
+            )}
+            <div className="w-8 h-8 rounded-full bg-zinc-800 border border-white/5 flex items-center justify-center overflow-hidden">
+              <i className="fa-solid fa-user-gear text-zinc-400"></i>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-12 gap-8">
+        {/* User Inputs Section */}
+        <div className="col-span-12 lg:col-span-4 space-y-6">
+          <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-sm shadow-xl">
+            <h2 className="text-xl font-semibold mb-4 text-zinc-200">Initialize Project</h2>
+            <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Hangi teknolojiyi araştırıp kodlamamı istersiniz?"
-              className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-5 text-sm h-36 resize-none focus:ring-2 focus:ring-sky-500 outline-none transition-all placeholder:text-slate-700"
-              disabled={isBuilding}
+              placeholder="What should I build? (e.g. A stock portfolio tracker with interactive charts)"
+              className="w-full h-44 bg-zinc-950/50 border border-white/10 rounded-2xl p-4 text-zinc-200 focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500 transition-all outline-none resize-none placeholder:text-zinc-600 text-sm leading-relaxed"
+              disabled={isGenerating}
             />
             <button 
-              onClick={() => handleStart()}
-              disabled={isBuilding || !prompt}
-              className="w-full mt-4 py-4 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white rounded-2xl font-black text-sm shadow-xl shadow-sky-950/20 transition-all flex items-center justify-center gap-3"
+              onClick={handleGenerate}
+              disabled={isGenerating || !prompt.trim()}
+              className="mt-4 w-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98] shadow-lg shadow-sky-500/20 group"
             >
-              {isBuilding ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-bolt"></i>}
-              {isBuilding ? 'WEB ARAŞTIRILIYOR...' : 'KEŞFET VE KODLA'}
+              {isGenerating ? (
+                <i className="fa-solid fa-spinner animate-spin"></i>
+              ) : (
+                <i className="fa-solid fa-wand-magic-sparkles group-hover:rotate-12 transition-transform"></i>
+              )}
+              {isGenerating ? 'Synthesizing...' : 'Generate Project'}
             </button>
-          </section>
+          </div>
 
-          <ResearchPulse isResearching={isBuilding} currentAction={currentAction} />
+          {/* Quick Templates */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest px-4">Templates</h3>
+            {TEMPLATES.map(template => (
+              <button
+                key={template.id}
+                onClick={() => setPrompt(template.basePrompt)}
+                className="w-full flex items-center gap-4 p-4 rounded-2xl border border-white/5 bg-zinc-900/20 hover:bg-zinc-800/40 hover:border-sky-500/30 transition-all text-left"
+              >
+                <div className={`w-10 h-10 rounded-xl bg-zinc-950 flex items-center justify-center border border-white/5 ${template.color}`}>
+                  <i className={`fa-solid ${template.icon}`}></i>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold">{template.name}</h4>
+                  <p className="text-xs text-zinc-500 line-clamp-1">{template.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
 
+          {/* Source Grounding References */}
           {sources.length > 0 && (
-            <section className="bg-slate-900 border border-slate-800 rounded-3xl p-6">
-               <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Bulunan Kaynaklar</h4>
-               <div className="flex flex-col gap-2">
-                 {sources.slice(0, 5).map((source, i) => (
-                   <a key={i} href={source.uri} target="_blank" className="text-[11px] p-2 bg-slate-950 rounded-lg border border-slate-800 hover:border-sky-500/50 text-slate-400 hover:text-sky-400 truncate transition-all">
-                     <i className="fas fa-link mr-2 text-[9px] opacity-50"></i> {source.title}
-                   </a>
-                 ))}
-               </div>
-            </section>
-          )}
-
-          {project && (
-            <section className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col flex-1">
-              <div className="p-5 border-b border-slate-800 bg-slate-800/30 flex justify-between items-center">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dosya Yapısı</h4>
-                <span className="text-[10px] text-sky-500 font-bold">{project.files.length} Dosya</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 max-h-[400px]">
-                {project.files.map((file, idx) => (
-                  <button key={idx} onClick={() => setSelectedFileIndex(idx)} className={`w-full text-left p-3 rounded-xl mb-1 flex items-center gap-3 transition-all ${selectedFileIndex === idx ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20' : 'text-slate-500 hover:bg-slate-800'}`}>
-                    <i className={`fas ${file.path.includes('.') ? 'fa-file-code' : 'fa-folder'} text-xs opacity-60`}></i>
-                    <span className="text-xs font-mono truncate">{file.path}</span>
-                  </button>
+            <div className="bg-zinc-900/40 border border-white/5 rounded-3xl p-6 backdrop-blur-sm">
+              <h3 className="text-sm font-bold text-sky-500 mb-4 flex items-center gap-2">
+                <i className="fa-solid fa-magnifying-glass-location"></i>
+                Web Intelligence Used
+              </h3>
+              <div className="space-y-3">
+                {sources.slice(0, 5).map((source, idx) => (
+                  <a 
+                    key={idx}
+                    href={source.uri} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors group"
+                  >
+                    <i className="fa-solid fa-link text-xs text-zinc-600 group-hover:text-sky-500"></i>
+                    <span className="text-xs text-zinc-400 truncate group-hover:text-zinc-200">{source.title}</span>
+                  </a>
                 ))}
               </div>
-            </section>
+            </div>
           )}
-        </aside>
+        </div>
 
-        <section className="lg:col-span-8 flex flex-col gap-6">
-          <div className="flex-1 bg-slate-950/50 rounded-[2.5rem] border border-slate-800/50 p-2 shadow-inner overflow-hidden flex flex-col relative">
-            <FileViewer 
-              file={selectedFileIndex !== null && project ? project.files[selectedFileIndex] : null}
-              onSave={(newContent) => {
-                if (project && selectedFileIndex !== null) {
-                  const updated = [...project.files];
-                  updated[selectedFileIndex].content = newContent;
-                  setProject({...project, files: updated});
-                  addLog(`${project.files[selectedFileIndex].path} güncellendi.`);
-                }
-              }}
-            />
+        {/* Output & Preview Section */}
+        <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+          <ResearchPulse isResearching={isGenerating} currentAction={currentAction} />
+
+          <div className="flex-1 bg-zinc-900/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-sm shadow-2xl flex flex-col min-h-[700px]">
+            {/* Tab Explorer */}
+            <div className="bg-zinc-950/40 border-b border-white/5 p-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {project?.files.map((file, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveFileIndex(idx)}
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all border ${
+                    activeFileIndex === idx 
+                    ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 shadow-inner' 
+                    : 'text-zinc-500 border-transparent hover:bg-white/5'
+                  }`}
+                >
+                  <i className={`fa-solid ${file.path.endsWith('.tsx') ? 'fa-square-code' : 'fa-file-lines'} ${activeFileIndex === idx ? 'opacity-100' : 'opacity-40'}`}></i>
+                  {file.path.split('/').pop()}
+                </button>
+              ))}
+              {!project && (
+                <div className="px-4 py-2 text-zinc-600 text-xs italic">
+                  Waiting for generation request...
+                </div>
+              )}
+            </div>
+
+            {/* Code Output Area */}
+            <div className="flex-1 relative bg-zinc-950/20 overflow-hidden group">
+              {activeFile ? (
+                <>
+                  <pre className="m-0 h-full p-8 overflow-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                    <code className={`language-${activeFile.language} text-sm leading-relaxed`}>
+                      {activeFile.content || '// Content streaming...'}
+                    </code>
+                  </pre>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(activeFile.content)}
+                    className="absolute top-6 right-6 p-4 bg-zinc-900/80 border border-white/10 rounded-2xl text-zinc-400 hover:text-sky-400 hover:border-sky-500/30 opacity-0 group-hover:opacity-100 transition-all hover:scale-105 active:scale-95 shadow-2xl backdrop-blur-md"
+                  >
+                    <i className="fa-regular fa-clone"></i>
+                  </button>
+                </>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-zinc-700 space-y-6">
+                  <div className="relative">
+                    <div className="w-24 h-24 bg-zinc-900/40 rounded-[2.5rem] flex items-center justify-center border border-white/5">
+                      <i className="fa-solid fa-code-merge text-5xl opacity-10"></i>
+                    </div>
+                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-sky-500/20 rounded-full blur-md animate-pulse"></div>
+                  </div>
+                  <p className="text-sm font-medium tracking-wide uppercase opacity-30">Agent Workspace Ready</p>
+                </div>
+              )}
+            </div>
+
+            {/* Environment Footer */}
+            <div className="px-6 py-4 bg-zinc-950/60 border-t border-white/5 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+              <div className="flex items-center gap-6">
+                <span className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${project?.status === 'generating' ? 'bg-sky-500 animate-ping' : 'bg-zinc-800'}`}></span>
+                  Runtime: {project?.status || 'Standby'}
+                </span>
+                {project && (
+                  <span className="border-l border-white/5 pl-6">
+                    Accuracy: 2025 Standard
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-4">
+                <span>UTF-8</span>
+                <span className="text-sky-900">|</span>
+                <span>TypeScript 5.x</span>
+              </div>
+            </div>
           </div>
-          
-          <div className="h-32 bg-slate-900 border border-slate-800 rounded-3xl p-4 overflow-y-auto font-mono text-[11px] text-slate-500 shadow-xl">
-             <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-800 text-slate-600">
-               <i className="fas fa-terminal"></i> <span>SİSTEM LOGLARI</span>
-             </div>
-             {logs.map((log, i) => (
-               <div key={i} className="mb-1">
-                 <span className="text-sky-900 mr-2">➜</span> {log}
-               </div>
-             ))}
-          </div>
-        </section>
+        </div>
       </main>
+
+      {/* Ambiance Effects */}
+      <div className="fixed inset-0 pointer-events-none z-[-1] overflow-hidden opacity-30">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-sky-600/10 blur-[150px] rounded-full"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-indigo-900/10 blur-[150px] rounded-full"></div>
+      </div>
     </div>
   );
-}
+};
+
+export default App;
