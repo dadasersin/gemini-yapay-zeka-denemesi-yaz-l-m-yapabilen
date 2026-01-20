@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvoCoder AI</title>
+    <title>EvoCoder AI - Research Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
@@ -13,52 +13,63 @@
         
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #e2e8f0;
+            background-color: #020617;
+            color: #f8fafc;
+            overflow-x: hidden;
         }
         .font-mono {
             font-family: 'Fira Code', monospace;
         }
         .gradient-text {
-            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: #1e293b;
+            background: #0f172a;
         }
         ::-webkit-scrollbar-thumb {
             background: #334155;
-            border-radius: 4px;
+            border-radius: 10px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569;
+        
+        .research-glow {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.15);
         }
 
-        /* Prism Fixes */
-        pre[class*="language-"] {
-            margin: 0 !important;
-            background: transparent !important;
-            padding: 0 !important;
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(1000%); }
+        }
+        .scan-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.5), transparent);
+            animation: scan 3s linear infinite;
         }
     </style>
 <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@google/genai": "https://esm.sh/@google/genai@1.37.0",
     "prismjs": "https://esm.sh/prismjs@1.29.0",
-    "prismjs/": "https://esm.sh/prismjs@^1.30.0/"
+    "prismjs/components/prism-typescript": "https://esm.sh/prismjs@1.29.0/components/prism-typescript",
+    "prismjs/components/prism-javascript": "https://esm.sh/prismjs@1.29.0/components/prism-javascript",
+    "prismjs/components/prism-css": "https://esm.sh/prismjs@1.29.0/components/prism-css",
+    "prismjs/components/prism-json": "https://esm.sh/prismjs@1.29.0/components/prism-json",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
     <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>

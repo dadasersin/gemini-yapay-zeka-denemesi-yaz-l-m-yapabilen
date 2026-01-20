@@ -51,21 +51,20 @@ export class GeminiCoderService {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Sen dünyanın en kıdemli yazılım mimarısın. İnterneti kullanarak şu anki en güncel, en güvenli ve en performanslı kütüphaneleri araştır.
-          Kullanıcı isteği: "${prompt}"
+          Sen otonom bir yazılım mühendisisin. Kullanıcının şu isteği için interneti tara ve en güncel (2025 standartlarında) kütüphane ve mimari yapıları bul:
+          İstek: "${prompt}"
           
-          Bu istek için modern bir proje yapısı oluştur.
-          Çıktı JSON formatında olmalı:
+          Lütfen şu yapıda bir JSON planı oluştur:
           {
-            "projectName": "...",
+            "projectName": "Örn: Modern-E-Ticaret-Projesi",
             "files": [
-              {"path": "src/main.ts", "purpose": "Entry point"},
+              {"path": "src/main.ts", "purpose": "Uygulama giriş noktası"},
               ...
             ]
           }
         `,
         config: {
-          thinkingConfig: { thinkingBudget: 15000 },
+          thinkingConfig: { thinkingBudget: 20000 },
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
           responseSchema: {
@@ -94,7 +93,7 @@ export class GeminiCoderService {
         sources: this.extractSources(response)
       };
     } catch (e) {
-      console.warn("API Error, switching to mock:", e);
+      console.warn("Project structure generation failed, using mock", e);
       return { data: this.getMockStructure(prompt), sources: [] };
     }
   }
@@ -108,21 +107,21 @@ export class GeminiCoderService {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Dosya: "${fileName}"
-          Proje bağlamı: ${prompt}
-          Mimar: ${context}
+          Görev: "${fileName}" dosyasını kodla.
+          Proje Amacı: ${prompt}
+          Mevcut Dosya Yapısı: ${context}
           
-          Lütfen internetteki en güncel dökümantasyonları ve best-practice'leri araştırarak bu dosyanın içeriğini en profesyonel şekilde yaz.
-          Sadece ham kod döndür.
+          Lütfen internetten bu dosya için gerekli olan en son dökümantasyonları ve kod örneklerini araştırarak hatasız bir içerik üret.
+          Sadece kodu döndür.
         `,
         config: {
-          thinkingConfig: { thinkingBudget: 10000 },
+          thinkingConfig: { thinkingBudget: 15000 },
           tools: [{ googleSearch: {} }]
         }
       });
       
       return {
-        data: response.text || '// Hata oluştu',
+        data: response.text || '// İçerik oluşturulamadı.',
         sources: this.extractSources(response)
       };
     } catch (e) {
@@ -130,172 +129,28 @@ export class GeminiCoderService {
     }
   }
 
-  async selfImprove(code: string, originalGoal: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) return code + "\n\n// EvoCoder AI tarafından optimize edildi (Demo)";
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `
-          Kodu internetteki en son güvenlik standartlarına göre optimize et:
-          ${code}
-          Orijinal Hedef: ${originalGoal}
-        `,
-        config: {
-          thinkingConfig: { thinkingBudget: 15000 },
-          tools: [{ googleSearch: {} }]
-        }
-      });
-      return response.text || code;
-    } catch (e) {
-      return code;
-    }
-  }
-
   async getAutocomplete(currentCode: string, cursorContext: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) return "  // Autocomplete simülasyonu";
-
+    if (this.isDemoMode || !this.ai) return "  // Otomatik tamamlama simülasyonu";
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Kodun devamını en mantıklı ve modern şekilde tamamla:\n${currentCode}\nBağlam: ${cursorContext}`,
+        contents: `Kodun devamını tamamla:\n${currentCode}\nBağlam: ${cursorContext}`,
       });
       return response.text || '';
-    } catch (e) {
-      return "";
-    }
-  }
-
-  async evolveSystem(request: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) return "// Sistem evrimi demo modunda simüle edildi.";
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `EvoCoder AI sistemini şu yönde geliştir: "${request}". İnternetteki en modern AI mimarilerini araştır.`,
-        config: { 
-          thinkingConfig: { thinkingBudget: 20000 },
-          tools: [{ googleSearch: {} }]
-        }
-      });
-      return response.text || '';
-    } catch (e) {
-      return "// Evrim başarısız.";
-    }
-  }
-
-  async generateLiveComponent(request: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) {
-      return `<div style="background:#1e293b; color:white; padding:20px; border-radius:10px; border:1px solid #334155; text-align:center;">
-        <h2 style="color:#38bdf8;">Demo Bileşen</h2>
-        <p>İsteğiniz: ${request}</p>
-      </div>`;
-    }
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Modern Tailwind CSS bileşeni oluştur: "${request}"`,
-      });
-      return response.text || '<div>Hata</div>';
-    } catch (e) {
-      return "<div>Hata</div>";
-    }
-  }
-
-  async generateTests(code: string, fileName: string) {
-    if (this.isDemoMode || !this.ai) {
-      return { tests: [{ name: "Demo Test", description: "Otomatik test", expected: "Ok" }] };
-    }
-
-    try {
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Bu kod için test senaryoları oluştur: ${fileName}`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              tests: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    expected: { type: Type.STRING }
-                  },
-                  required: ["name", "description", "expected"]
-                }
-              }
-            },
-            required: ["tests"]
-          }
-        }
-      });
-      return JSON.parse(response.text);
-    } catch (e) {
-      return { tests: [] };
-    }
-  }
-
-  async performAudit(files: GeneratedFile[]): Promise<ProjectAudit> {
-    if (this.isDemoMode || !this.ai) {
-      return { score: 85, summary: "Demo Analizi", issues: [] };
-    }
-
-    try {
-      const context = files.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n---\n');
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `Projeyi internetteki en güncel güvenlik açıklarını (CVE) araştırarak denetle: ${context}`,
-        config: {
-          thinkingConfig: { thinkingBudget: 15000 },
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              score: { type: Type.NUMBER },
-              summary: { type: Type.STRING },
-              issues: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    severity: { type: Type.STRING },
-                    category: { type: Type.STRING },
-                    title: { type: Type.STRING },
-                    description: { type: Type.STRING },
-                    suggestion: { type: Type.STRING }
-                  },
-                  required: ["id", "severity", "category", "title", "description", "suggestion"]
-                }
-              }
-            },
-            required: ["score", "summary", "issues"]
-          }
-        }
-      });
-      return JSON.parse(response.text);
-    } catch (e) {
-      return { score: 0, summary: "Hata", issues: [] };
-    }
+    } catch { return ""; }
   }
 
   private getMockStructure(prompt: string) {
     return {
-      projectName: "Demo Proje",
+      projectName: "Offline-Project",
       files: [
-        { path: "src/index.ts", purpose: "Giriş" },
-        { path: "src/app.ts", purpose: "Mantık" }
+        { path: "src/index.ts", purpose: "Main entry" },
+        { path: "src/utils.ts", purpose: "Helper functions" }
       ]
     };
   }
 
   private getMockFileContent(fileName: string): string {
-    return `// Demo içeriği: ${fileName}`;
+    return `// Demo modunda üretilen içerik: ${fileName}\nexport const run = () => console.log("Hello!");`;
   }
 }
