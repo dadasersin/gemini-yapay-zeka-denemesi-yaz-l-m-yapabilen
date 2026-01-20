@@ -1,11 +1,18 @@
 
 // @google/genai guidelines followed: per-call initialization, direct process.env.API_KEY access, and proper result extraction.
 import { GoogleGenAI, Type } from "@google/genai";
-import { GeneratedFile, ProjectAudit } from "../types";
+import { GeneratedFile } from "../types";
 
 export interface GroundingSource {
   title: string;
   uri: string;
+}
+
+export interface TechnicalKnowledge {
+  topic: string;
+  summary: string;
+  libraries: { name: string; version: string; reason: string }[];
+  keyFacts: string[];
 }
 
 export interface EnhancedResponse<T> {
@@ -25,7 +32,6 @@ export class GeminiCoderService {
     }
   }
 
-  // Extract grounding sources from the response's grounding metadata.
   private extractSources(response: any): GroundingSource[] {
     const sources: GroundingSource[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
@@ -42,35 +48,92 @@ export class GeminiCoderService {
     return sources;
   }
 
-  // Uses gemini-3-pro-preview for complex reasoning and architecture planning.
-  async generateProjectStructure(prompt: string): Promise<EnhancedResponse<any>> {
+  /**
+   * Phase 1: Deep Research
+   * Specifically instructs Gemini to act as a data scraper and aggregator.
+   */
+  async collectKnowledge(prompt: string): Promise<EnhancedResponse<TechnicalKnowledge>> {
     if (this.isDemoMode) {
-      return { data: this.getMockStructure(prompt), sources: [] };
+      return { 
+        data: { 
+          topic: prompt, 
+          summary: "Demo knowledge base generated offline.", 
+          libraries: [{ name: "React", version: "18.x", reason: "Stable default" }],
+          keyFacts: ["Researching is simulated in demo mode."] 
+        }, 
+        sources: [] 
+      };
     }
 
-    // Guideline: Create a new GoogleGenAI instance right before making an API call.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Sen dünyanın en gelişmiş otonom yazılım mühendislerinden birisin. 
-          Kullanıcının şu isteği için interneti kullanarak 2025 yılının en güncel, kararlı ve performanslı teknolojilerini araştır:
-          İstek: "${prompt}"
+          GÖREV: İnterneti kullanarak şu konu hakkında teknik araştırma yap ve veri topla: "${prompt}"
           
-          Lütfen şu yapıda profesyonel bir proje planı (JSON) oluştur. Sadece en önemli dosyaları dahil et:
+          Lütfen şu bilgileri topla ve JSON olarak sakla:
+          1. Konunun teknik özeti.
+          2. Kullanılması gereken en güncel kütüphaneler (versiyonlarıyla birlikte).
+          3. Uygulanması gereken kritik teknik gerçekler ve best-practice'ler.
+        `,
+        config: {
+          thinkingConfig: { thinkingBudget: 32000 },
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              topic: { type: Type.STRING },
+              summary: { type: Type.STRING },
+              libraries: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    version: { type: Type.STRING },
+                    reason: { type: Type.STRING }
+                  },
+                  required: ["name", "version", "reason"]
+                }
+              },
+              keyFacts: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["topic", "summary", "libraries", "keyFacts"]
+          }
+        }
+      });
+
+      return {
+        data: JSON.parse(response.text || "{}"),
+        sources: this.extractSources(response)
+      };
+    } catch (e) {
+      console.error("Research failed:", e);
+      throw e;
+    }
+  }
+
+  async generateProjectStructure(prompt: string, knowledge: string): Promise<EnhancedResponse<any>> {
+    if (this.isDemoMode) return { data: this.getMockStructure(prompt), sources: [] };
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: `
+          TOPLANAN BİLGİLER: ${knowledge}
+          HEDEF PROJE: ${prompt}
+          
+          Bu bilgilere dayanarak modern bir dosya yapısı oluştur (JSON):
           {
-            "projectName": "modern-project-slug",
-            "files": [
-              {"path": "src/main.tsx", "purpose": "App entry with strict typing"},
-              {"path": "src/App.tsx", "purpose": "Main layout component"},
-              {"path": "src/styles.css", "purpose": "Tailwind/Modern styling"}
-            ]
+            "projectName": "project-slug",
+            "files": [{"path": "src/App.tsx", "purpose": "Main view using collected libraries"}]
           }
         `,
         config: {
-          thinkingConfig: { thinkingBudget: 24000 },
-          tools: [{ googleSearch: {} }],
+          thinkingConfig: { thinkingBudget: 15000 },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -92,70 +155,43 @@ export class GeminiCoderService {
           }
         }
       });
-      
-      // Guideline: Use response.text (property access) to get the generated text.
-      const text = response.text || "{}";
-      const jsonStart = text.indexOf('{');
-      const jsonEnd = text.lastIndexOf('}') + 1;
-      const cleanJson = jsonStart !== -1 ? text.slice(jsonStart, jsonEnd) : text;
-      
+
       return {
-        data: JSON.parse(cleanJson),
+        data: JSON.parse(response.text || "{}"),
         sources: this.extractSources(response)
       };
     } catch (e) {
-      console.warn("Architecture failed, using mock", e);
       return { data: this.getMockStructure(prompt), sources: [] };
     }
   }
 
-  // Generate file content with thinking budget for high quality code generation.
-  async generateFileContent(prompt: string, fileName: string, context: string): Promise<EnhancedResponse<string>> {
-    if (this.isDemoMode) {
-      return { data: this.getMockFileContent(fileName), sources: [] };
-    }
+  async generateFileContent(prompt: string, fileName: string, knowledge: string, context: string): Promise<EnhancedResponse<string>> {
+    if (this.isDemoMode) return { data: this.getMockFileContent(fileName), sources: [] };
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Dosya Kodlama Görevi: "${fileName}"
-          Genel Proje Amacı: ${prompt}
-          Tüm Dosya Yapısı: ${context}
+          DOSYA: ${fileName}
+          ARAŞTIRILAN BİLGİLER: ${knowledge}
+          BAĞLAM: ${context}
           
-          Lütfen bu dosya için internetteki en güncel dökümantasyonları araştır. 
-          Eğer bir web projesi ise modern kütüphaneleri ve güncel standartları kullan. 
-          Modern, temiz, yorum satırları içeren ve hatasız bir kod yaz. 
-          Sadece kodu döndür. Markdown blokları kullanma.
+          Lütfen toplanan bilgiler ışığında en modern kodu yaz. Sadece kod döndür.
         `,
         config: {
-          thinkingConfig: { thinkingBudget: 18000 },
-          tools: [{ googleSearch: {} }]
+          thinkingConfig: { thinkingBudget: 20000 },
+          tools: [{ googleSearch: {} }] // Keep search active for fine-tuned details
         }
       });
-      
+
       return {
-        data: response.text || '// İçerik üretilemedi.',
+        data: response.text || '// Error generating content',
         sources: this.extractSources(response)
       };
     } catch (e) {
       return { data: this.getMockFileContent(fileName), sources: [] };
     }
-  }
-
-  // Fast completion using gemini-3-flash-preview.
-  async getAutocomplete(currentCode: string, cursorContext: string): Promise<string> {
-    if (this.isDemoMode) return "  // AI Tamamlama";
-    
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Tamamla:\n${currentCode}\nBağlam: ${cursorContext}`,
-      });
-      return response.text || '';
-    } catch { return ""; }
   }
 
   private getMockStructure(prompt: string) {
@@ -163,13 +199,12 @@ export class GeminiCoderService {
       projectName: "Offline-Development",
       files: [
         { path: "src/main.ts", purpose: "Entry" },
-        { path: "src/App.tsx", purpose: "Root Component" },
-        { path: "src/index.css", purpose: "Styles" }
+        { path: "src/App.tsx", purpose: "Root Component" }
       ]
     };
   }
 
   private getMockFileContent(fileName: string): string {
-    return `// Autonomous content for ${fileName}\nexport default function App() {\n  return <div>Hello</div>\n}`;
+    return `// Autonomous content for ${fileName}\nexport default function App() { return <div>Hello</div> }`;
   }
 }
