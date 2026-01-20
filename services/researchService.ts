@@ -1,87 +1,73 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-
 export interface ScrapedData {
   id: string;
   topic: string;
   timestamp: string;
   summary: string;
   technicalDetails: string[];
-  sources: { title: string; uri: string }[];
+  sources: { title: string; uri: string; stars?: number }[];
+  repoStats?: {
+    language: string;
+    forks: number;
+    license: string;
+  };
 }
 
 export class WebResearchService {
-  private STORAGE_KEY = 'RESEARCH_VAULT_DATA';
+  private STORAGE_KEY = 'GITHUB_VAULT_DATA';
 
   constructor() {}
 
-  // LocalStorage'dan geçmiş verileri getir
   getStoredResearch(): ScrapedData[] {
     const data = localStorage.getItem(this.STORAGE_KEY);
     return data ? JSON.parse(data) : [];
   }
 
-  // Veriyi kalıcı olarak kaydet
   private storeData(newData: ScrapedData) {
     const existing = this.getStoredResearch();
     const updated = [newData, ...existing];
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(updated));
   }
 
-  // İnternetten bilgi topla ve analiz et
+  // GitHub üzerinden otonom araştırma yap
   async performResearch(topic: string): Promise<ScrapedData> {
-    // İnternet taraması için sistemin sağladığı arama motorunu kullanıyoruz
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: `
-          GÖREV: İnterneti tara ve şu konu hakkında derinlemesine teknik bilgi topla: "${topic}"
-          
-          Lütfen şu yapıda bir veri paketi oluştur (JSON):
-          1. Kısa teknik özet.
-          2. En az 5 adet kritik teknik detay/bulgu.
-        `,
-        config: {
-          thinkingConfig: { thinkingBudget: 25000 },
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              summary: { type: Type.STRING },
-              technicalDetails: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["summary", "technicalDetails"]
-          }
-        }
-      });
+      // GitHub Search API kullanımı - API Key gerektirmez (limitli olsa da genel aramaya açıktır)
+      const response = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(topic)}+sort:stars`);
+      const data = await response.json();
 
-      const result = JSON.parse(response.text || "{}");
-      
-      // Kaynakları ayıkla
-      const sources: { title: string; uri: string }[] = [];
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      if (chunks) {
-        chunks.forEach((chunk: any) => {
-          if (chunk.web) sources.push({ title: chunk.web.title, uri: chunk.web.uri });
-        });
+      if (!data.items || data.items.length === 0) {
+        throw new Error("Eşleşen GitHub projesi bulunamadı.");
       }
+
+      // En iyi 3 projeyi analiz et
+      const topRepos = data.items.slice(0, 5);
+      const bestRepo = topRepos[0];
 
       const scrapedData: ScrapedData = {
         id: Date.now().toString(),
-        topic,
+        topic: topic.toUpperCase(),
         timestamp: new Date().toLocaleString('tr-TR'),
-        summary: result.summary,
-        technicalDetails: result.technicalDetails,
-        sources: sources
+        summary: `${bestRepo.full_name} projesi, ${topic} araması için en yüksek uyumlulukla bulundu. ${bestRepo.description || 'Açıklama bulunmuyor.'}`,
+        technicalDetails: topRepos.map((repo: any) => 
+          `${repo.name}: ${repo.stargazers_count} yıldız, ${repo.language || 'Belirsiz'} diliyle geliştirilmiş.`
+        ),
+        sources: topRepos.map((repo: any) => ({
+          title: repo.full_name,
+          uri: repo.html_url,
+          stars: repo.stargazers_count
+        })),
+        repoStats: {
+          language: bestRepo.language || 'N/A',
+          forks: bestRepo.forks_count,
+          license: bestRepo.license?.name || 'Belirtilmemiş'
+        }
       };
 
       this.storeData(scrapedData);
       return scrapedData;
     } catch (e) {
-      console.error("Research error:", e);
+      console.error("GitHub Research error:", e);
       throw e;
     }
   }
