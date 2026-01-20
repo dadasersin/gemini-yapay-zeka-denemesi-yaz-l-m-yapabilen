@@ -380,6 +380,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'files' | 'preview' | 'terminal' | 'structure' | 'evolution' | 'tests' | 'audit'>('files');
   const [liveComponents, setLiveComponents] = useState<string[]>([]);
   const [evolutionPlan, setEvolutionPlan] = useState<string>('');
+  
+  const coderService = useMemo(() => new GeminiCoderService(), []);
 
   const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
 
@@ -387,10 +389,13 @@ export default function App() {
     const finalPrompt = customPrompt || prompt;
     if (!finalPrompt.trim()) return;
 
+    if (coderService.isDemoMode) {
+      addLog("DEMO MODU AKTİF: API anahtarı girilmedi, simüle edilmiş veri kullanılıyor.");
+    }
+
     if (finalPrompt.toLowerCase().includes('ekle') || finalPrompt.toLowerCase().includes('oluştur')) {
       addLog("Dinamik bileşen isteği algılandı. Üretiliyor...");
-      const coder = new GeminiCoderService();
-      const html = await coder.generateLiveComponent(finalPrompt);
+      const html = await coderService.generateLiveComponent(finalPrompt);
       setLiveComponents(prev => [html, ...prev]);
       setPrompt('');
       addLog("Yeni bileşen başarıyla sayfaya eklendi.");
@@ -401,11 +406,9 @@ export default function App() {
     setActiveTab('terminal');
     addLog(`Proje başlatılıyor: ${finalPrompt}`);
     
-    const coder = new GeminiCoderService();
-    
     try {
       addLog("Mimar belirleniyor...");
-      const structure = await coder.generateProjectStructure(finalPrompt);
+      const structure = await coderService.generateProjectStructure(finalPrompt);
       const newProject: Project = { 
         id: Date.now().toString(), 
         name: structure.projectName, 
@@ -423,7 +426,7 @@ export default function App() {
       for (let i = 0; i < structure.files.length; i++) {
         const fileSpec = structure.files[i];
         addLog(`${fileSpec.path} kodlanıyor...`);
-        const content = await coder.generateFileContent(finalPrompt, fileSpec.path, context);
+        const content = await coderService.generateFileContent(finalPrompt, fileSpec.path, context);
         const file: GeneratedFile = { path: fileSpec.path, content: content, language: fileSpec.path.split('.').pop() || 'text' };
         generatedFiles.push(file);
         setProject(prev => prev ? { ...prev, files: [...generatedFiles], progress: 10 + ((i + 1) / structure.files.length) * 50 } : null);
@@ -433,7 +436,7 @@ export default function App() {
       setProject(prev => prev ? { ...prev, status: 'optimizing' } : null);
       const improvedFiles: GeneratedFile[] = [];
       for (const file of generatedFiles) {
-        const improvedCode = await coder.selfImprove(file.content, finalPrompt);
+        const improvedCode = await coderService.selfImprove(file.content, finalPrompt);
         improvedFiles.push({ ...file, content: improvedCode });
       }
 
@@ -443,6 +446,7 @@ export default function App() {
 
     } catch (error) {
       addLog("HATA: Geliştirme sürecinde bir sorun oluştu.");
+      console.error(error);
     } finally {
       setIsBuilding(false);
     }
@@ -451,11 +455,10 @@ export default function App() {
   const handleRunAudit = async () => {
     if (!project || project.files.length === 0) return;
     setIsAuditing(true);
-    addLog("Güvenlik ve Kalite denetimi başlatıldı. Tüm dosyalar taranıyor...");
+    addLog("Güvenlik ve Kalite denetimi başlatıldı...");
     
-    const coder = new GeminiCoderService();
     try {
-      const auditResult = await coder.performAudit(project.files);
+      const auditResult = await coderService.performAudit(project.files);
       setProject({ ...project, audit: auditResult });
       addLog("Denetim tamamlandı. Proje sağlık skoru: " + auditResult.score);
     } catch (e) {
@@ -469,9 +472,8 @@ export default function App() {
     if (!evolutionPlan) return;
     setIsEvolving(true);
     addLog("SİSTEM EVRİMİ BAŞLATILDI: Çekirdek kodlar yeniden yazılıyor...");
-    const coder = new GeminiCoderService();
     try {
-      const result = await coder.evolveSystem(evolutionPlan);
+      const result = await coderService.evolveSystem(evolutionPlan);
       addLog("EVRİM TAMAMLANDI: Yeni özellikler sisteme entegre edildi.");
       setEvolutionPlan('');
     } catch (e) {
@@ -486,10 +488,9 @@ export default function App() {
     setIsTesting(true);
     addLog("Test laboratuvarı başlatılıyor...");
     
-    const coder = new GeminiCoderService();
     try {
       const targetFile = project.files.find(f => f.path.includes('main') || f.path.includes('service')) || project.files[0];
-      const result = await coder.generateTests(targetFile.content, targetFile.path);
+      const result = await coderService.generateTests(targetFile.content, targetFile.path);
       
       const tests: TestCase[] = result.tests.map((t: any, i: number) => ({
         id: i.toString(),
@@ -519,6 +520,12 @@ export default function App() {
           <p className="text-slate-400 mt-1">Kendi Kendini Değiştirebilen Özerk Ekosistem</p>
         </div>
         <div className="flex gap-3">
+          {coderService.isDemoMode && (
+             <div className="bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-xl flex items-center gap-2">
+               <i className="fas fa-exclamation-triangle text-amber-500 text-xs"></i>
+               <span className="text-[10px] font-bold text-amber-500 uppercase tracking-tighter">Demo Modu</span>
+             </div>
+          )}
           <button 
             onClick={() => setActiveTab('evolution')}
             className="bg-purple-600/20 hover:bg-purple-600/40 text-purple-400 border border-purple-500/30 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
