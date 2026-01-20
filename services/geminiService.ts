@@ -2,6 +2,16 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { GeneratedFile, ProjectAudit } from "../types";
 
+export interface GroundingSource {
+  title: string;
+  uri: string;
+}
+
+export interface EnhancedResponse<T> {
+  data: T;
+  sources: GroundingSource[];
+}
+
 export class GeminiCoderService {
   private ai: GoogleGenAI | null = null;
   public isDemoMode: boolean = false;
@@ -16,20 +26,36 @@ export class GeminiCoderService {
     }
   }
 
-  async generateProjectStructure(prompt: string) {
+  private extractSources(response: any): GroundingSource[] {
+    const sources: GroundingSource[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+      chunks.forEach((chunk: any) => {
+        if (chunk.web) {
+          sources.push({
+            title: chunk.web.title,
+            uri: chunk.web.uri
+          });
+        }
+      });
+    }
+    return sources;
+  }
+
+  async generateProjectStructure(prompt: string): Promise<EnhancedResponse<any>> {
     if (this.isDemoMode || !this.ai) {
-      return this.getMockStructure(prompt);
+      return { data: this.getMockStructure(prompt), sources: [] };
     }
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Sen dünyanın en kıdemli yazılım mimarısın. 
+          Sen dünyanın en kıdemli yazılım mimarısın. İnterneti kullanarak şu anki en güncel, en güvenli ve en performanslı kütüphaneleri araştır.
           Kullanıcı isteği: "${prompt}"
           
-          Bu istek için modern, ölçeklenebilir bir proje yapısı oluştur.
-          Çıktı JSON formatında olmalı ve şu yapıda olmalı:
+          Bu istek için modern bir proje yapısı oluştur.
+          Çıktı JSON formatında olmalı:
           {
             "projectName": "...",
             "files": [
@@ -40,6 +66,7 @@ export class GeminiCoderService {
         `,
         config: {
           thinkingConfig: { thinkingBudget: 15000 },
+          tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -61,57 +88,62 @@ export class GeminiCoderService {
           }
         }
       });
-      return JSON.parse(response.text);
+      
+      return {
+        data: JSON.parse(response.text),
+        sources: this.extractSources(response)
+      };
     } catch (e) {
       console.warn("API Error, switching to mock:", e);
-      this.isDemoMode = true;
-      return this.getMockStructure(prompt);
+      return { data: this.getMockStructure(prompt), sources: [] };
     }
   }
 
-  async generateFileContent(prompt: string, fileName: string, context: string): Promise<string> {
+  async generateFileContent(prompt: string, fileName: string, context: string): Promise<EnhancedResponse<string>> {
     if (this.isDemoMode || !this.ai) {
-      return this.getMockFileContent(fileName);
+      return { data: this.getMockFileContent(fileName), sources: [] };
     }
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Sen uzman bir yazılımcısın. Şu dosyanın kodunu yaz: "${fileName}"
+          Dosya: "${fileName}"
           Proje bağlamı: ${prompt}
-          Tüm proje yapısı: ${context}
+          Mimar: ${context}
           
-          Sadece kodu döndür. Markdown kod blokları içine ALMA. Sadece ham kod metni.
+          Lütfen internetteki en güncel dökümantasyonları ve best-practice'leri araştırarak bu dosyanın içeriğini en profesyonel şekilde yaz.
+          Sadece ham kod döndür.
         `,
         config: {
-          thinkingConfig: { thinkingBudget: 10000 }
+          thinkingConfig: { thinkingBudget: 10000 },
+          tools: [{ googleSearch: {} }]
         }
       });
-      return response.text || '// Error generating code';
+      
+      return {
+        data: response.text || '// Hata oluştu',
+        sources: this.extractSources(response)
+      };
     } catch (e) {
-      return this.getMockFileContent(fileName);
+      return { data: this.getMockFileContent(fileName), sources: [] };
     }
   }
 
   async selfImprove(code: string, originalGoal: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) return code + "\n\n// Optimized by EvoCoder AI (Demo Mode)";
+    if (this.isDemoMode || !this.ai) return code + "\n\n// EvoCoder AI tarafından optimize edildi (Demo)";
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: `
-          Aşağıdaki kodu incele ve kendi kendini geliştir/optimize et. 
-          Hataları düzelt, performansı artır ve temiz kod prensiplerine uyun.
-          Orijinal Hedef: ${originalGoal}
-          
-          Kod:
+          Kodu internetteki en son güvenlik standartlarına göre optimize et:
           ${code}
-          
-          Sadece geliştirilmiş kodu döndür.
+          Orijinal Hedef: ${originalGoal}
         `,
         config: {
-          thinkingConfig: { thinkingBudget: 15000 }
+          thinkingConfig: { thinkingBudget: 15000 },
+          tools: [{ googleSearch: {} }]
         }
       });
       return response.text || code;
@@ -121,19 +153,12 @@ export class GeminiCoderService {
   }
 
   async getAutocomplete(currentCode: string, cursorContext: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) return "  console.log('EvoCoder autocomplete simulation');";
+    if (this.isDemoMode || !this.ai) return "  // Autocomplete simülasyonu";
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `
-          Aşağıdaki kodun devamı için en mantıklı kod bloğunu öner. 
-          Mevcut Kod:
-          ${currentCode}
-          
-          Bağlam: ${cursorContext}
-          Sadece devam kodunu döndür, açıklama yapma.
-        `,
+        contents: `Kodun devamını en mantıklı ve modern şekilde tamamla:\n${currentCode}\nBağlam: ${cursorContext}`,
       });
       return response.text || '';
     } catch (e) {
@@ -142,22 +167,20 @@ export class GeminiCoderService {
   }
 
   async evolveSystem(request: string): Promise<string> {
-    if (this.isDemoMode || !this.ai) return "// System evolution simulated in demo mode.";
+    if (this.isDemoMode || !this.ai) return "// Sistem evrimi demo modunda simüle edildi.";
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `
-          Sen EvoCoder AI'nın çekirdek zekasısın. Kullanıcı senden mevcut yeteneklerini güncellemeni veya yeni bir özellik eklemeni istiyor.
-          Kullanıcı İsteği: "${request}"
-          
-          Mevcut App.tsx ve geminiService.ts mantığını bildiğini varsayarak, bu özelliği gerçekleştirecek YENİ kod bloğunu veya güncellenmiş mantığı döndür.
-        `,
-        config: { thinkingConfig: { thinkingBudget: 20000 } }
+        contents: `EvoCoder AI sistemini şu yönde geliştir: "${request}". İnternetteki en modern AI mimarilerini araştır.`,
+        config: { 
+          thinkingConfig: { thinkingBudget: 20000 },
+          tools: [{ googleSearch: {} }]
+        }
       });
       return response.text || '';
     } catch (e) {
-      return "// Evolution failed.";
+      return "// Evrim başarısız.";
     }
   }
 
@@ -166,51 +189,29 @@ export class GeminiCoderService {
       return `<div style="background:#1e293b; color:white; padding:20px; border-radius:10px; border:1px solid #334155; text-align:center;">
         <h2 style="color:#38bdf8;">Demo Bileşen</h2>
         <p>İsteğiniz: ${request}</p>
-        <button style="background:#38bdf8; border:none; color:#0f172a; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold;">Tıkla</button>
       </div>`;
     }
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `
-          Kullanıcı için şu özelliği içeren bir 'Canlı Bileşen' (Live Component) oluştur: "${request}"
-          Sadece Tailwind CSS ve Vanilla JS kullanarak tek bir HTML dosyası (inline CSS/JS) döndür.
-          Tasarım modern, karanlık tema ve şık olmalı.
-        `,
+        contents: `Modern Tailwind CSS bileşeni oluştur: "${request}"`,
       });
-      return response.text || '<div>Hata oluştu</div>';
+      return response.text || '<div>Hata</div>';
     } catch (e) {
-      return "<div>Hata oluştu</div>";
+      return "<div>Hata</div>";
     }
   }
 
   async generateTests(code: string, fileName: string) {
     if (this.isDemoMode || !this.ai) {
-      return {
-        tests: [
-          { name: "Sözdizimi Kontrolü", description: "Dosya içeriğinin geçerli kod içerdiğini doğrular.", expected: "Geçerli" },
-          { name: "Bağımlılık Analizi", description: "Gerekli kütüphanelerin import edildiğini kontrol eder.", expected: "Tamamlandı" }
-        ]
-      };
+      return { tests: [{ name: "Demo Test", description: "Otomatik test", expected: "Ok" }] };
     }
 
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `
-          Aşağıdaki kod için 3-5 adet kritik test senaryosu oluştur.
-          Dosya: ${fileName}
-          Kod:
-          ${code}
-          
-          JSON formatında döndür:
-          {
-            "tests": [
-              { "name": "...", "description": "...", "expected": "..." }
-            ]
-          }
-        `,
+        contents: `Bu kod için test senaryoları oluştur: ${fileName}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -241,26 +242,17 @@ export class GeminiCoderService {
 
   async performAudit(files: GeneratedFile[]): Promise<ProjectAudit> {
     if (this.isDemoMode || !this.ai) {
-      return {
-        score: 85,
-        summary: "Demo modu analizi: Proje genel olarak iyi yapılandırılmış, ancak gerçek API analizi için anahtar gereklidir.",
-        issues: [
-          { id: "1", severity: "info", category: "best-practice", title: "API Anahtarı Eksik", description: "Sistem demo modunda çalışıyor.", suggestion: "Gerçek analiz için API anahtarı ekleyin." }
-        ]
-      };
+      return { score: 85, summary: "Demo Analizi", issues: [] };
     }
 
     try {
       const context = files.map(f => `File: ${f.path}\nContent:\n${f.content}`).join('\n---\n');
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `
-          Tüm projeyi güvenlik, performans ve en iyi uygulamalar açısından denetle.
-          Kodları analiz et ve bulgularını JSON formatında döndür.
-          ${context}
-        `,
+        contents: `Projeyi internetteki en güncel güvenlik açıklarını (CVE) araştırarak denetle: ${context}`,
         config: {
           thinkingConfig: { thinkingBudget: 15000 },
+          tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -295,21 +287,15 @@ export class GeminiCoderService {
 
   private getMockStructure(prompt: string) {
     return {
-      projectName: prompt.substring(0, 15) || "Demo Proje",
+      projectName: "Demo Proje",
       files: [
-        { path: "src/index.ts", purpose: "Ana giriş noktası" },
-        { path: "src/app.ts", purpose: "Uygulama mantığı" },
-        { path: "src/styles.css", purpose: "Görsel tasarım" },
-        { path: "package.json", purpose: "Yapılandırma" }
+        { path: "src/index.ts", purpose: "Giriş" },
+        { path: "src/app.ts", purpose: "Mantık" }
       ]
     };
   }
 
   private getMockFileContent(fileName: string): string {
-    const ext = fileName.split('.').pop();
-    if (ext === 'ts') return `// Simulated code for ${fileName}\nexport const init = () => {\n  console.log("Hello from ${fileName}");\n};`;
-    if (ext === 'css') return `/* Simulated styles */\nbody {\n  background: #0f172a;\n  color: white;\n}`;
-    if (ext === 'json') return `{\n  "name": "demo-project",\n  "version": "1.0.0"\n}`;
-    return `// Code for ${fileName}`;
+    return `// Demo içeriği: ${fileName}`;
   }
 }
